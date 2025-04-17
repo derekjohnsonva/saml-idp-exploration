@@ -28,13 +28,16 @@ async fn main() -> std::io::Result<()> {
         idp: Arc::new(idp),
         cert_der,
         idp_entity_id: "https://my-idp.example.com".to_string(),
+        // Replace these with your actual SP values from the SP metadata
+        sp_entity_id: "IAMShowcase".to_string(),
+        sp_acs_url: "https://sptest.iamshowcase.com/acs".to_string(),
     });
     HttpServer::new(move || {
         App::new()
             .app_data(app_state.clone())
             .route("/sso", web::get().to(handle_sso))
             .route("/sso", web::post().to(handle_sso))
-            // .route("/idp-init", web::get().to(handle_idp_initiated_sso))
+            .route("/idp-init", web::get().to(handle_idp_initiated_sso))
             .route("/metadata", web::get().to(metadata))
     })
     .bind("127.0.0.1:8080")?
@@ -46,6 +49,9 @@ struct AppState {
     idp: Arc<idp::IdentityProvider>,
     cert_der: Vec<u8>,
     idp_entity_id: String,
+    // Default values for the SP (you'll need to update these with your actual SP values)
+    sp_entity_id: String,
+    sp_acs_url: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -53,6 +59,13 @@ struct SsoQuery {
     user_id: String,
     saml_request: Option<String>,
     relay_state: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct IdpInitiatedQuery {
+    user_id: String,
+    relay_state: Option<String>,
+    target_url: Option<String>, // Optional target URL or page to redirect to after authentication
 }
 
 #[derive(serde::Deserialize)]
@@ -170,6 +183,99 @@ async fn handle_sso(
     "#,
         acs_url, encoded_response, relay_state
     );
+    HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(form)
+}
+
+async fn handle_idp_initiated_sso(
+    query: web::Query<IdpInitiatedQuery>,
+    state: web::Data<AppState>,
+) -> impl Responder {
+    // Extract userId
+    let user_id = query.user_id.clone();
+    if user_id.is_empty() {
+        return HttpResponse::BadRequest().body("Missing userId parameter");
+    }
+
+    // Get relay state if provided
+    let relay_state = query.relay_state.clone().unwrap_or_default();
+
+    // Use the target_url as relay_state if provided
+    let final_relay_state = if relay_state.is_empty() && query.target_url.is_some() {
+        query.target_url.clone().unwrap()
+    } else {
+        relay_state
+    };
+
+    // Set up user attributes
+    let borrowed_user_id = user_id.as_str();
+    let email_string = format!("{}@example.com", borrowed_user_id);
+    let user_email = email_string.as_str();
+
+    // Create SAML response attributes
+    let attributes = vec![
+        ResponseAttribute {
+            required_attribute: RequiredAttribute {
+                name: "userId".to_string(),
+                format: Some("User Id".to_string()),
+            },
+            value: borrowed_user_id,
+        },
+        ResponseAttribute {
+            required_attribute: RequiredAttribute {
+                name: "email".to_string(),
+                format: Some("Email Address".to_string()),
+            },
+            value: user_email,
+        },
+    ];
+
+    // Since there's no AuthnRequest in IdP-initiated SSO, there's no InResponseTo
+    // We use a UUID or empty string instead
+    let in_response_to = ""; // No InResponseTo for IdP-initiated flow
+
+    // Sign the response
+    let response = state
+        .idp
+        .sign_authn_response(
+            &state.cert_der,
+            &user_id,            // Use userId as the subject name ID
+            &state.sp_entity_id, // Use the SP entity ID from configuration
+            &state.sp_acs_url,   // Use the SP ACS URL from configuration
+            &state.idp_entity_id,
+            in_response_to,
+            &attributes,
+        )
+        .unwrap();
+
+    // Convert to XML and encode
+    let response_xml = response.to_string().unwrap();
+    let encoded_response = general_purpose::STANDARD.encode(response_xml.as_bytes());
+
+    // Create auto-submit form for the browser
+    let form = format!(
+        r#"
+    <html>
+        <head>
+            <title>SAML Response</title>
+        </head>
+        <body>
+            <form method="post" action="{}" id="SAMLResponseForm">
+                <input type="hidden" name="SAMLResponse" value="{}" />
+                <input type="hidden" name="RelayState" value="{}" />
+                <input id="SAMLSubmitButton" type="submit" value="Submit" />
+            </form>
+            <script>
+                document.getElementById('SAMLSubmitButton').style.visibility="hidden";
+                document.getElementById('SAMLResponseForm').submit();
+            </script>
+        </body>
+    </html>
+    "#,
+        state.sp_acs_url, encoded_response, final_relay_state
+    );
+
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(form)
