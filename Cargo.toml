@@ -1,0 +1,16 @@
+[package]
+name = "saml-idp-exploration"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+samael = { git = "https://github.com/derekjohnsonva/samael.git", rev = "3817c2a", features = [
+  "xmlsec",
+] }
+serde = "1.0.0"
+tokio = { version = "1.28.1", features = ["full"] }
+actix-web = "4.10.2"
+base64 = "0.22.1"
+reqwest = "0.12.15"
+openssl = "0.10.52"
+openssl-probe = "0.1.5"
