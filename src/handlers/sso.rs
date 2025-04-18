@@ -2,6 +2,7 @@ use actix_web::{HttpResponse, Responder, web};
 use base64::Engine as _;
 use base64::engine::general_purpose;
 use log::{debug, error, info, warn};
+use samael::idp::IdentityProvider;
 use samael::idp::response_builder::ResponseAttribute;
 use samael::idp::sp_extractor::RequiredAttribute;
 use samael::schema::{AuthnRequest, Response};
@@ -100,7 +101,8 @@ pub async fn handle_sso(
 
     debug!("Signing SAML response");
     // Sign the response
-    let response = match state.idp.sign_authn_response(
+    let response = match sign_authn_response_with_config(
+        &state.idp,
         &state.cert_der,
         &user_id, // Use userId as the subject name ID
         &audience.unwrap(),
@@ -108,6 +110,7 @@ pub async fn handle_sso(
         &state.idp_entity_id,
         &in_response_to,
         &attributes,
+        state.sign_assertions,
     ) {
         Ok(resp) => {
             debug!("Successfully signed SAML response");
@@ -163,7 +166,8 @@ pub async fn handle_idp_initiated_sso(
 
     debug!("Signing SAML response for IdP-initiated SSO");
     // Sign the response
-    let response = match state.idp.sign_authn_response(
+    let response = match sign_authn_response_with_config(
+        &state.idp,
         &state.cert_der,
         &user_id,            // Use userId as the subject name ID
         &state.sp_entity_id, // Use the SP entity ID from configuration
@@ -171,6 +175,7 @@ pub async fn handle_idp_initiated_sso(
         &state.idp_entity_id,
         in_response_to,
         &attributes,
+        state.sign_assertions,
     ) {
         Ok(resp) => {
             debug!("Successfully signed SAML response");
@@ -186,35 +191,103 @@ pub async fn handle_idp_initiated_sso(
         "Sending IdP-initiated SAML response to {}",
         state.sp_acs_url
     );
-    debug!("SAML Response form = {:?}", &response.to_string());
     // Create and return HTML form with SAML response
     create_saml_post_form(&response, &state.sp_acs_url, &final_relay_state)
 }
 
 // Helper function to create user attributes
 fn create_user_attributes<'a>(user_id: &'a str, email: &'a str) -> Vec<ResponseAttribute<'a>> {
+    // Extract first and last name from username (for demo purposes)
+    // TODO: Remove this
+    let (first_name, last_name) = if user_id.contains('.') {
+        let parts: Vec<&str> = user_id.split('.').collect();
+        if parts.len() > 1 {
+            (parts[0], parts[1])
+        } else {
+            (parts[0], "User")
+        }
+    } else {
+        ("First", "Last")
+    };
+
+    // Format matches Okta's requested attributes from SP metadata
     vec![
+        // Required attributes according to Okta SP metadata
         ResponseAttribute {
             required_attribute: RequiredAttribute {
-                name: "userId".to_string(),
-                format: Some("User Id".to_string()),
+                name: "firstName".to_string(),
+                format: Some("urn:oasis:names:tc:SAML:2.0:attrname-format:uri".to_string()),
             },
-            value: user_id,
+            value: first_name,
+        },
+        ResponseAttribute {
+            required_attribute: RequiredAttribute {
+                name: "lastName".to_string(),
+                format: Some("urn:oasis:names:tc:SAML:2.0:attrname-format:uri".to_string()),
+            },
+            value: last_name,
         },
         ResponseAttribute {
             required_attribute: RequiredAttribute {
                 name: "email".to_string(),
-                format: Some("Email Address".to_string()),
+                format: Some("urn:oasis:names:tc:SAML:2.0:attrname-format:uri".to_string()),
             },
             value: email,
         },
+        // Optional attribute
+        ResponseAttribute {
+            required_attribute: RequiredAttribute {
+                name: "mobilePhone".to_string(),
+                format: Some("urn:oasis:names:tc:SAML:2.0:attrname-format:uri".to_string()),
+            },
+            value: "555-123-4567", // Example value
+        },
     ]
+}
+
+// Custom function to handle response signing with extra options
+fn sign_authn_response_with_config(
+    idp: &IdentityProvider,
+    idp_x509_cert_der: &[u8],
+    subject_name_id: &str,
+    audience: &str,
+    acs_url: &str,
+    issuer: &str,
+    in_response_to_id: &str,
+    attributes: &[ResponseAttribute],
+    sign_assertions: bool,
+) -> Result<Response, Box<dyn std::error::Error>> {
+    // We don't need to build the response template separately,
+    // as sign_authn_response will handle it
+
+    // There's no direct support for signing assertions in the library,
+    // so for now we're only signing the response
+    if sign_assertions {
+        debug!("Okta requires signed assertions, but library only supports signed responses");
+        // TODO: Implement assertion signing capability
+    }
+
+    // Use the standard signing method which already returns a Response
+    let response = idp.sign_authn_response(
+        idp_x509_cert_der,
+        subject_name_id,
+        audience,
+        acs_url,
+        issuer,
+        in_response_to_id,
+        attributes,
+    )?;
+
+    Ok(response)
 }
 
 // Helper function to create HTML form for POST binding
 fn create_saml_post_form(response: &Response, acs_url: &str, relay_state: &str) -> HttpResponse {
     // Convert to XML and encode
     let response_xml = response.to_string().unwrap();
+
+    // Log the final response XML for debugging
+    debug!("Final signed response XML: {}", response_xml);
     let encoded_response = general_purpose::STANDARD.encode(response_xml.as_bytes());
 
     // Create auto-submit form for the browser

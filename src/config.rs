@@ -26,9 +26,11 @@ pub fn create_app_state() -> web::Data<AppState> {
         idp: Arc::new(idp),
         cert_der,
         idp_entity_id: "https://219c-73-143-30-151.ngrok-free.app".to_string(),
-        // Replace these with your actual SP values from the SP metadata
+        // Okta SP values from the SP metadata
         sp_entity_id: "https://www.okta.com/saml2/service-provider/spkfpnrefermtybsfvcd"
             .to_string(),
         sp_acs_url: "https://dev-50824006.okta.com/sso/saml2/0oaocmyrr91ruN6AP5d7".to_string(),
+        // Okta requires signed assertions (WantAssertionsSigned="true")
+        sign_assertions: true,
     })
 }

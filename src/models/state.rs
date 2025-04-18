@@ -7,4 +7,5 @@ pub struct AppState {
     pub idp_entity_id: String,
     pub sp_entity_id: String,
     pub sp_acs_url: String,
+    pub sign_assertions: bool,
 }
