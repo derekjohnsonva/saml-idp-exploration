@@ -1,7 +1,8 @@
-use actix_web::{App, HttpServer, web, middleware::Logger};
-use log::{info, debug};
+use actix_web::{App, HttpServer, middleware::Logger, web};
 use env_logger::Env;
+use log::{debug, info};
 
+mod cert_util;
 mod config;
 mod handlers;
 mod models;
@@ -11,9 +12,9 @@ async fn main() -> std::io::Result<()> {
     // Initialize logger
     // Set the default log level to INFO, but allow overriding via RUST_LOG environment variable
     env_logger::init_from_env(Env::default().default_filter_or("info"));
-    
+
     info!("Starting SAML IdP server");
-    
+
     // Create application state
     let app_state = config::create_app_state();
     debug!("Application state created");
