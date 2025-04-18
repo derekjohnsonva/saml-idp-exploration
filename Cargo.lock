@@ -29,7 +29,7 @@ dependencies = [
  "actix-rt",
  "actix-service",
  "actix-utils",
- "base64",
+ "base64 0.22.1",
  "bitflags",
  "brotli",
  "bytes",
@@ -265,6 +265,12 @@ dependencies = [
  "rustc-demangle",
  "windows-targets 0.52.6",
 ]
+
+[[package]]
+name = "base64"
+version = "0.21.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
 name = "base64"
@@ -1394,6 +1400,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pem"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b13fe415cdf3c8e44518e18a7c95a13431d9bdf6d15367d82b23c377fdd441a"
+dependencies = [
+ "base64 0.21.7",
+ "serde",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1555,7 +1571,7 @@ version = "0.12.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d19c46a6fdd48bc4dab94b6103fccc55d34c67cc0ad04653aad4ea2a07cd7bbb"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "bytes",
  "encoding_rs",
  "futures-core",
@@ -1688,7 +1704,7 @@ name = "samael"
 version = "0.0.19"
 source = "git+https://github.com/derekjohnsonva/samael.git?rev=3817c2a#3817c2afc399446fd588ebf181f87e7924aed44b"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "bindgen",
  "chrono",
  "data-encoding",
@@ -1714,9 +1730,10 @@ name = "saml-idp-exploration"
 version = "0.1.0"
 dependencies = [
  "actix-web",
- "base64",
+ "base64 0.22.1",
  "openssl",
  "openssl-probe",
+ "pem",
  "reqwest",
  "samael",
  "serde",

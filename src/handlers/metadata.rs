@@ -1,6 +1,7 @@
 use actix_web::{HttpResponse, Responder, web};
 use base64::Engine as _;
 use base64::engine::general_purpose;
+use pem;
 use samael::key_info::{KeyInfo, X509Data};
 use samael::metadata::{Endpoint, EntityDescriptor, IdpSsoDescriptor, KeyDescriptor};
 use samael::metadata::{HTTP_POST_BINDING, HTTP_REDIRECT_BINDING};
@@ -21,7 +22,7 @@ pub async fn metadata(state: web::Data<AppState>) -> impl Responder {
         },
         encryption_methods: None,
     };
-    let sso_service_endpoint = format!("{}/sso", state.sp_acs_url);
+    let sso_service_endpoint = format!("{}/sso", state.idp_entity_id);
     let idp_descriptor = IdpSsoDescriptor {
         protocol_support_enumeration: Some("urn:oasis:names:tc:SAML:2.0:protocol".to_string()),
         key_descriptors: vec![key_descriptor],
@@ -65,3 +66,28 @@ pub async fn metadata(state: web::Data<AppState>) -> impl Responder {
     HttpResponse::Ok().content_type("application/xml").body(xml)
 }
 
+/// Provides the IdP signing certificate in DER format
+pub async fn certificate_der(state: web::Data<AppState>) -> impl Responder {
+    HttpResponse::Ok()
+        .content_type("application/x-x509-ca-cert")
+        .append_header((
+            "Content-Disposition",
+            "attachment; filename=\"idp-certificate.der\"",
+        ))
+        .body(state.cert_der.clone())
+}
+
+/// Provides the IdP signing certificate in PEM format
+pub async fn certificate_pem(state: web::Data<AppState>) -> impl Responder {
+    // Convert DER to PEM
+    // Create a PEM with "CERTIFICATE" tag and the certificate data
+    let pem_string = pem::encode(&pem::Pem::new("CERTIFICATE", state.cert_der.clone()));
+
+    HttpResponse::Ok()
+        .content_type("application/x-pem-file")
+        .append_header((
+            "Content-Disposition",
+            "attachment; filename=\"idp-certificate.pem\"",
+        ))
+        .body(pem_string)
+}

@@ -58,6 +58,8 @@ pub async fn index() -> impl Responder {
             <div class="links">
                 <a href="/metadata">View IdP Metadata</a>
                 <a href="/idp-init?user_id=testuser">Initiate SSO (Test User)</a>
+                <a href="/certificate/pem">Download Certificate (PEM)</a>
+                <a href="/certificate/der">Download Certificate (DER)</a>
             </div>
         </div>
     </body>

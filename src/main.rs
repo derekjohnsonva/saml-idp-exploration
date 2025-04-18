@@ -21,9 +21,16 @@ async fn main() -> std::io::Result<()> {
                 web::get().to(handlers::sso::handle_idp_initiated_sso),
             )
             .route("/metadata", web::get().to(handlers::metadata::metadata))
+            .route(
+                "/certificate/pem",
+                web::get().to(handlers::metadata::certificate_pem),
+            )
+            .route(
+                "/certificate/der",
+                web::get().to(handlers::metadata::certificate_der),
+            )
     })
     .bind("127.0.0.1:8080")?
     .run()
     .await
 }
-
