@@ -1,12 +1,12 @@
 use actix_web::{HttpResponse, Responder, web};
 use base64::Engine as _;
 use base64::engine::general_purpose;
+use log::{debug, error, info, warn};
 use samael::idp::response_builder::ResponseAttribute;
 use samael::idp::sp_extractor::RequiredAttribute;
 use samael::schema::{AuthnRequest, Response};
 use samael::traits::ToXml;
 use std::borrow::Borrow;
-use log::{info, debug, warn, error};
 
 use crate::models::request::{IdpInitiatedQuery, SamlRequest, SsoQuery};
 use crate::models::state::AppState;
@@ -17,14 +17,14 @@ pub async fn handle_sso(
     saml_request: Option<web::Form<SamlRequest>>,
 ) -> impl Responder {
     info!("Handling SP-initiated SSO request");
-    
+
     // Extract userId
     let user_id = query.user_id.clone();
     if user_id.is_empty() {
         warn!("Missing userId in SP-initiated SSO request");
         return HttpResponse::BadRequest().body("Missing userId parameter");
     }
-    
+
     debug!("Processing SSO for user: {}", user_id);
 
     // Decode SAML request
@@ -39,7 +39,7 @@ pub async fn handle_sso(
                     return HttpResponse::BadRequest().body("Invalid SAML request encoding");
                 }
             };
-            
+
             let xml = match String::from_utf8(decoded) {
                 Ok(xml_str) => xml_str,
                 Err(e) => {
@@ -47,7 +47,7 @@ pub async fn handle_sso(
                     return HttpResponse::BadRequest().body("Invalid SAML request format");
                 }
             };
-            
+
             debug!("Parsing SAML AuthnRequest");
             let request: AuthnRequest = match xml.parse() {
                 Ok(req) => req,
@@ -88,8 +88,11 @@ pub async fn handle_sso(
         .assertion_consumer_service_url
         .unwrap_or_default();
     let in_response_to = authn_request.id;
-    
-    debug!("AuthnRequest details - Audience: {:?}, ACS URL: {}, ID: {}", audience, acs_url, in_response_to);
+
+    debug!(
+        "AuthnRequest details - Audience: {:?}, ACS URL: {}, ID: {}",
+        audience, acs_url, in_response_to
+    );
 
     // Create user attributes
     let email = format!("{}@example.com", user_id);
@@ -97,21 +100,19 @@ pub async fn handle_sso(
 
     debug!("Signing SAML response");
     // Sign the response
-    let response = match state
-        .idp
-        .sign_authn_response(
-            &state.cert_der,
-            &user_id, // Use userId as the subject name ID
-            &audience.unwrap(),
-            &acs_url,
-            &state.idp_entity_id,
-            &in_response_to,
-            &attributes,
-        ) {
+    let response = match state.idp.sign_authn_response(
+        &state.cert_der,
+        &user_id, // Use userId as the subject name ID
+        &audience.unwrap(),
+        &acs_url,
+        &state.idp_entity_id,
+        &in_response_to,
+        &attributes,
+    ) {
         Ok(resp) => {
             debug!("Successfully signed SAML response");
             resp
-        },
+        }
         Err(e) => {
             error!("Failed to sign SAML response: {}", e);
             return HttpResponse::InternalServerError().body("Failed to create SAML response");
@@ -128,14 +129,14 @@ pub async fn handle_idp_initiated_sso(
     state: web::Data<AppState>,
 ) -> impl Responder {
     info!("Handling IdP-initiated SSO request");
-    
+
     // Extract userId
     let user_id = query.user_id.clone();
     if user_id.is_empty() {
         warn!("Missing userId in IdP-initiated SSO request");
         return HttpResponse::BadRequest().body("Missing userId parameter");
     }
-    
+
     debug!("Processing IdP-initiated SSO for user: {}", user_id);
 
     // Get relay state if provided
@@ -154,33 +155,38 @@ pub async fn handle_idp_initiated_sso(
 
     // Since there's no AuthnRequest in IdP-initiated SSO, there's no InResponseTo
     let in_response_to = ""; // No InResponseTo for IdP-initiated flow
-    
-    debug!("IdP-initiated SSO to SP entity: {}, ACS URL: {}", state.sp_entity_id, state.sp_acs_url);
+
+    debug!(
+        "IdP-initiated SSO to SP entity: {}, ACS URL: {}",
+        state.sp_entity_id, state.sp_acs_url
+    );
 
     debug!("Signing SAML response for IdP-initiated SSO");
     // Sign the response
-    let response = match state
-        .idp
-        .sign_authn_response(
-            &state.cert_der,
-            &user_id,            // Use userId as the subject name ID
-            &state.sp_entity_id, // Use the SP entity ID from configuration
-            &state.sp_acs_url,   // Use the SP ACS URL from configuration
-            &state.idp_entity_id,
-            in_response_to,
-            &attributes,
-        ) {
+    let response = match state.idp.sign_authn_response(
+        &state.cert_der,
+        &user_id,            // Use userId as the subject name ID
+        &state.sp_entity_id, // Use the SP entity ID from configuration
+        &state.sp_acs_url,   // Use the SP ACS URL from configuration
+        &state.idp_entity_id,
+        in_response_to,
+        &attributes,
+    ) {
         Ok(resp) => {
             debug!("Successfully signed SAML response");
             resp
-        },
+        }
         Err(e) => {
             error!("Failed to sign SAML response: {}", e);
             return HttpResponse::InternalServerError().body("Failed to create SAML response");
         }
     };
 
-    info!("Sending IdP-initiated SAML response to {}", state.sp_acs_url);
+    info!(
+        "Sending IdP-initiated SAML response to {}",
+        state.sp_acs_url
+    );
+    debug!("SAML Response form = {:?}", &response.to_string());
     // Create and return HTML form with SAML response
     create_saml_post_form(&response, &state.sp_acs_url, &final_relay_state)
 }

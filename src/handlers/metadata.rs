@@ -1,12 +1,12 @@
 use actix_web::{HttpResponse, Responder, web};
 use base64::Engine as _;
 use base64::engine::general_purpose;
+use log::{debug, error, info};
 use pem;
 use samael::key_info::{KeyInfo, X509Data};
 use samael::metadata::{Endpoint, EntityDescriptor, IdpSsoDescriptor, KeyDescriptor};
 use samael::metadata::{HTTP_POST_BINDING, HTTP_REDIRECT_BINDING};
 use samael::traits::ToXml;
-use log::{info, debug, error};
 
 use crate::models::state::AppState;
 
@@ -69,13 +69,13 @@ pub async fn metadata(state: web::Data<AppState>) -> impl Responder {
         Ok(xml_str) => {
             debug!("Successfully generated metadata XML");
             xml_str
-        },
+        }
         Err(e) => {
             error!("Failed to generate metadata XML: {}", e);
             return HttpResponse::InternalServerError().body("Failed to generate metadata");
         }
     };
-    
+
     info!("Returning metadata XML");
     HttpResponse::Ok().content_type("application/xml").body(xml)
 }
