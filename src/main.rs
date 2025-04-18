@@ -13,6 +13,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(app_state.clone())
+            .route("/", web::get().to(handlers::landing::index))
             .route("/sso", web::get().to(handlers::sso::handle_sso))
             .route("/sso", web::post().to(handlers::sso::handle_sso))
             .route(
