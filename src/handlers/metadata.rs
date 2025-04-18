@@ -21,7 +21,7 @@ pub async fn metadata(state: web::Data<AppState>) -> impl Responder {
         },
         encryption_methods: None,
     };
-
+    let sso_service_endpoint = format!("{}/sso", state.sp_acs_url);
     let idp_descriptor = IdpSsoDescriptor {
         protocol_support_enumeration: Some("urn:oasis:names:tc:SAML:2.0:protocol".to_string()),
         key_descriptors: vec![key_descriptor],
@@ -29,12 +29,12 @@ pub async fn metadata(state: web::Data<AppState>) -> impl Responder {
         single_sign_on_services: vec![
             Endpoint {
                 binding: HTTP_POST_BINDING.to_string(),
-                location: "https://your-domain.com/sso".to_string(),
+                location: sso_service_endpoint.clone(),
                 response_location: None,
             },
             Endpoint {
                 binding: HTTP_REDIRECT_BINDING.to_string(),
-                location: "https://your-domain.com/sso".to_string(),
+                location: sso_service_endpoint,
                 response_location: None,
             },
         ],

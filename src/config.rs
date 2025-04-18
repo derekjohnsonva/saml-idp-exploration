@@ -20,7 +20,7 @@ pub fn create_app_state() -> web::Data<AppState> {
     web::Data::new(AppState {
         idp: Arc::new(idp),
         cert_der,
-        idp_entity_id: "https://my-idp.example.com".to_string(),
+        idp_entity_id: "https://9c31-73-143-30-151.ngrok-free.app".to_string(),
         // Replace these with your actual SP values from the SP metadata
         sp_entity_id: "IAMShowcase".to_string(),
         sp_acs_url: "https://sptest.iamshowcase.com/acs".to_string(),
