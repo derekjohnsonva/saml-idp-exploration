@@ -6,10 +6,13 @@ use samael::key_info::{KeyInfo, X509Data};
 use samael::metadata::{Endpoint, EntityDescriptor, IdpSsoDescriptor, KeyDescriptor};
 use samael::metadata::{HTTP_POST_BINDING, HTTP_REDIRECT_BINDING};
 use samael::traits::ToXml;
+use log::{info, debug, error};
 
 use crate::models::state::AppState;
 
 pub async fn metadata(state: web::Data<AppState>) -> impl Responder {
+    info!("Serving IdP metadata");
+    debug!("Generating metadata for entity ID: {}", state.idp_entity_id);
     let cert_b64 = general_purpose::STANDARD.encode(&state.cert_der);
 
     let key_descriptor = KeyDescriptor {
@@ -62,12 +65,25 @@ pub async fn metadata(state: web::Data<AppState>) -> impl Responder {
         ..EntityDescriptor::default()
     };
 
-    let xml = entity_descriptor.to_string().unwrap();
+    let xml = match entity_descriptor.to_string() {
+        Ok(xml_str) => {
+            debug!("Successfully generated metadata XML");
+            xml_str
+        },
+        Err(e) => {
+            error!("Failed to generate metadata XML: {}", e);
+            return HttpResponse::InternalServerError().body("Failed to generate metadata");
+        }
+    };
+    
+    info!("Returning metadata XML");
     HttpResponse::Ok().content_type("application/xml").body(xml)
 }
 
 /// Provides the IdP signing certificate in DER format
 pub async fn certificate_der(state: web::Data<AppState>) -> impl Responder {
+    info!("Serving IdP certificate in DER format");
+    debug!("Certificate size: {} bytes", state.cert_der.len());
     HttpResponse::Ok()
         .content_type("application/x-x509-ca-cert")
         .append_header((
@@ -79,6 +95,8 @@ pub async fn certificate_der(state: web::Data<AppState>) -> impl Responder {
 
 /// Provides the IdP signing certificate in PEM format
 pub async fn certificate_pem(state: web::Data<AppState>) -> impl Responder {
+    info!("Serving IdP certificate in PEM format");
+    debug!("Certificate size: {} bytes", state.cert_der.len());
     // Convert DER to PEM
     // Create a PEM with "CERTIFICATE" tag and the certificate data
     let pem_string = pem::encode(&pem::Pem::new("CERTIFICATE", state.cert_der.clone()));

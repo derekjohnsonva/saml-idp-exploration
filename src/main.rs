@@ -1,4 +1,6 @@
-use actix_web::{App, HttpServer, web};
+use actix_web::{App, HttpServer, web, middleware::Logger};
+use log::{info, debug};
+use env_logger::Env;
 
 mod config;
 mod handlers;
@@ -6,12 +8,23 @@ mod models;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // Initialize logger
+    // Set the default log level to INFO, but allow overriding via RUST_LOG environment variable
+    env_logger::init_from_env(Env::default().default_filter_or("info"));
+    
+    info!("Starting SAML IdP server");
+    
     // Create application state
     let app_state = config::create_app_state();
+    debug!("Application state created");
 
     // Start HTTP server
+    info!("Configuring HTTP server");
+    info!("Server will be available at http://127.0.0.1:8080");
     HttpServer::new(move || {
         App::new()
+            .wrap(Logger::default()) // Add logger middleware for HTTP requests
+            .wrap(Logger::new("%a %r %s %b %{User-Agent}i %T")) // Add custom format logger
             .app_data(app_state.clone())
             .route("/", web::get().to(handlers::landing::index))
             .route("/sso", web::get().to(handlers::sso::handle_sso))
@@ -31,6 +44,7 @@ async fn main() -> std::io::Result<()> {
             )
     })
     .bind("127.0.0.1:8080")?
+    .workers(2)
     .run()
     .await
 }

@@ -1,7 +1,9 @@
 use actix_web::{HttpResponse, Responder};
+use log::info;
 
 /// Handles the root path, showing a landing page for the SAML Demo IdP
 pub async fn index() -> impl Responder {
+    info!("Serving landing page");
     let html = r#"
     <!DOCTYPE html>
     <html lang="en">

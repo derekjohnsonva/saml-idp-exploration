@@ -6,6 +6,7 @@ use samael::idp::sp_extractor::RequiredAttribute;
 use samael::schema::{AuthnRequest, Response};
 use samael::traits::ToXml;
 use std::borrow::Borrow;
+use log::{info, debug, warn, error};
 
 use crate::models::request::{IdpInitiatedQuery, SamlRequest, SsoQuery};
 use crate::models::state::AppState;
@@ -15,31 +16,59 @@ pub async fn handle_sso(
     state: web::Data<AppState>,
     saml_request: Option<web::Form<SamlRequest>>,
 ) -> impl Responder {
+    info!("Handling SP-initiated SSO request");
+    
     // Extract userId
     let user_id = query.user_id.clone();
     if user_id.is_empty() {
+        warn!("Missing userId in SP-initiated SSO request");
         return HttpResponse::BadRequest().body("Missing userId parameter");
     }
+    
+    debug!("Processing SSO for user: {}", user_id);
 
     // Decode SAML request
     let authn_request = match saml_request.borrow() {
         Some(form) => {
             // Handle POST request
-            let decoded = general_purpose::STANDARD
-                .decode(&form.saml_request)
-                .unwrap();
-            let xml = String::from_utf8(decoded).unwrap();
-            let request: AuthnRequest = xml.parse().unwrap();
+            debug!("Handling POST binding SAML request");
+            let decoded = match general_purpose::STANDARD.decode(&form.saml_request) {
+                Ok(data) => data,
+                Err(e) => {
+                    error!("Failed to decode SAML request: {}", e);
+                    return HttpResponse::BadRequest().body("Invalid SAML request encoding");
+                }
+            };
+            
+            let xml = match String::from_utf8(decoded) {
+                Ok(xml_str) => xml_str,
+                Err(e) => {
+                    error!("Failed to convert decoded SAML request to UTF-8: {}", e);
+                    return HttpResponse::BadRequest().body("Invalid SAML request format");
+                }
+            };
+            
+            debug!("Parsing SAML AuthnRequest");
+            let request: AuthnRequest = match xml.parse() {
+                Ok(req) => req,
+                Err(e) => {
+                    error!("Failed to parse SAML AuthnRequest: {}", e);
+                    return HttpResponse::BadRequest().body("Invalid SAML AuthnRequest");
+                }
+            };
             request
         }
         None => {
             // Handle GET request for redirect binding
             if query.saml_request.is_some() {
+                debug!("Handling GET binding SAML request");
                 // Decode and inflate the request
                 // Implementation needed for deflate decompression
                 // ...
+                error!("Redirect binding not implemented yet");
                 todo!("Implement SAML request decoding for redirect binding")
             } else {
+                warn!("Missing SAMLRequest parameter");
                 return HttpResponse::BadRequest().body("Missing SAMLRequest parameter");
             }
         }
@@ -59,13 +88,16 @@ pub async fn handle_sso(
         .assertion_consumer_service_url
         .unwrap_or_default();
     let in_response_to = authn_request.id;
+    
+    debug!("AuthnRequest details - Audience: {:?}, ACS URL: {}, ID: {}", audience, acs_url, in_response_to);
 
     // Create user attributes
     let email = format!("{}@example.com", user_id);
     let attributes = create_user_attributes(&user_id, &email);
 
+    debug!("Signing SAML response");
     // Sign the response
-    let response = state
+    let response = match state
         .idp
         .sign_authn_response(
             &state.cert_der,
@@ -75,9 +107,18 @@ pub async fn handle_sso(
             &state.idp_entity_id,
             &in_response_to,
             &attributes,
-        )
-        .unwrap();
+        ) {
+        Ok(resp) => {
+            debug!("Successfully signed SAML response");
+            resp
+        },
+        Err(e) => {
+            error!("Failed to sign SAML response: {}", e);
+            return HttpResponse::InternalServerError().body("Failed to create SAML response");
+        }
+    };
 
+    info!("Sending SAML response to {}", acs_url);
     // Create and return HTML form with SAML response
     create_saml_post_form(&response, &acs_url, &relay_state)
 }
@@ -86,11 +127,16 @@ pub async fn handle_idp_initiated_sso(
     query: web::Query<IdpInitiatedQuery>,
     state: web::Data<AppState>,
 ) -> impl Responder {
+    info!("Handling IdP-initiated SSO request");
+    
     // Extract userId
     let user_id = query.user_id.clone();
     if user_id.is_empty() {
+        warn!("Missing userId in IdP-initiated SSO request");
         return HttpResponse::BadRequest().body("Missing userId parameter");
     }
+    
+    debug!("Processing IdP-initiated SSO for user: {}", user_id);
 
     // Get relay state if provided
     let relay_state = query.relay_state.clone().unwrap_or_default();
@@ -108,9 +154,12 @@ pub async fn handle_idp_initiated_sso(
 
     // Since there's no AuthnRequest in IdP-initiated SSO, there's no InResponseTo
     let in_response_to = ""; // No InResponseTo for IdP-initiated flow
+    
+    debug!("IdP-initiated SSO to SP entity: {}, ACS URL: {}", state.sp_entity_id, state.sp_acs_url);
 
+    debug!("Signing SAML response for IdP-initiated SSO");
     // Sign the response
-    let response = state
+    let response = match state
         .idp
         .sign_authn_response(
             &state.cert_der,
@@ -120,9 +169,18 @@ pub async fn handle_idp_initiated_sso(
             &state.idp_entity_id,
             in_response_to,
             &attributes,
-        )
-        .unwrap();
+        ) {
+        Ok(resp) => {
+            debug!("Successfully signed SAML response");
+            resp
+        },
+        Err(e) => {
+            error!("Failed to sign SAML response: {}", e);
+            return HttpResponse::InternalServerError().body("Failed to create SAML response");
+        }
+    };
 
+    info!("Sending IdP-initiated SAML response to {}", state.sp_acs_url);
     // Create and return HTML form with SAML response
     create_saml_post_form(&response, &state.sp_acs_url, &final_relay_state)
 }
