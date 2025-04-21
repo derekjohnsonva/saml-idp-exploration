@@ -25,7 +25,8 @@ pub fn create_app_state() -> web::Data<AppState> {
     web::Data::new(AppState {
         idp: Arc::new(idp),
         cert_der,
-        idp_entity_id: "https://219c-73-143-30-151.ngrok-free.app".to_string(),
+        idp_entity_id: "https://49fe-2600-4040-4032-6b00-d043-cc56-fed5-9532.ngrok-free.app"
+            .to_string(),
         // Okta SP values from the SP metadata
         sp_entity_id: "https://www.okta.com/saml2/service-provider/spkfpnrefermtybsfvcd"
             .to_string(),
