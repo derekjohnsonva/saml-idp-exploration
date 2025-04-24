@@ -1767,6 +1767,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "base64 0.22.1",
+ "chrono",
  "env_logger",
  "log",
  "openssl",
@@ -1776,6 +1777,7 @@ dependencies = [
  "samael",
  "serde",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

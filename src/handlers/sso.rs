@@ -1,14 +1,15 @@
-use actix_web::{HttpResponse, Responder, web};
-use base64::Engine as _;
+use actix_web::{web, HttpResponse, Responder};
 use base64::engine::general_purpose;
-use log::{debug, error, info, warn};
-use samael::idp::IdentityProvider;
+use base64::Engine as _;
+use log::{debug, error, info, trace, warn};
 use samael::idp::response_builder::ResponseAttribute;
 use samael::idp::sp_extractor::RequiredAttribute;
+use samael::idp::IdentityProvider;
 use samael::schema::{AuthnRequest, Response};
 use samael::traits::ToXml;
 use std::borrow::Borrow;
 
+use crate::handlers::response_builder::sign_authn_response;
 use crate::models::request::{IdpInitiatedQuery, SamlRequest, SsoQuery};
 use crate::models::state::AppState;
 
@@ -100,25 +101,26 @@ pub async fn handle_sso(
     let attributes = create_user_attributes(&user_id, &email);
 
     debug!("Signing SAML response");
+    let authn_response_fields = SignAuthnResponseFields {
+        idp_x509_cert_der: &state.cert_der,
+        subject_name_id: &user_id,
+        audience: &audience.unwrap(),
+        acs_url: &acs_url,
+        issuer: &state.idp_entity_id,
+        in_response_to_id: Some(in_response_to),
+        attributes: &attributes,
+    };
+
     // Sign the response
-    let response = match sign_authn_response_with_config(
-        &state.idp,
-        &state.cert_der,
-        &user_id, // Use userId as the subject name ID
-        &audience.unwrap(),
-        &acs_url,
-        &state.idp_entity_id,
-        &in_response_to,
-        &attributes,
-        state.sign_assertions,
-    ) {
+    let response = match sign_authn_response_with_config(&state.idp, authn_response_fields) {
         Ok(resp) => {
-            debug!("Successfully signed SAML response");
+            debug!("Successfully signed SAML response with ID: {}", resp.id);
             resp
         }
         Err(e) => {
             error!("Failed to sign SAML response: {}", e);
-            return HttpResponse::InternalServerError().body("Failed to create SAML response");
+            return HttpResponse::InternalServerError()
+                .body(format!("Failed to create SAML response: {}", e));
         }
     };
 
@@ -145,19 +147,11 @@ pub async fn handle_idp_initiated_sso(
     // Get relay state if provided
     let relay_state = query.relay_state.clone().unwrap_or_default();
 
-    // Use the target_url as relay_state if provided
-    let final_relay_state = if relay_state.is_empty() && query.target_url.is_some() {
-        query.target_url.clone().unwrap()
-    } else {
-        relay_state
-    };
-
     // Create user attributes
     let email = format!("{}@example.com", user_id);
     let attributes = create_user_attributes(&user_id, &email);
 
-    // Since there's no AuthnRequest in IdP-initiated SSO, there's no InResponseTo
-    let in_response_to = ""; // No InResponseTo for IdP-initiated flow
+    // For IdP-initiated flows, we use an empty string for InResponseTo
 
     debug!(
         "IdP-initiated SSO to SP entity: {}, ACS URL: {}",
@@ -165,25 +159,25 @@ pub async fn handle_idp_initiated_sso(
     );
 
     debug!("Signing SAML response for IdP-initiated SSO");
+    let authn_response_fields = SignAuthnResponseFields {
+        idp_x509_cert_der: &state.cert_der,
+        subject_name_id: &user_id,
+        audience: &state.sp_entity_id,
+        acs_url: &state.sp_acs_url,
+        issuer: &state.idp_entity_id,
+        in_response_to_id: None,
+        attributes: &attributes,
+    };
     // Sign the response
-    let response = match sign_authn_response_with_config(
-        &state.idp,
-        &state.cert_der,
-        &user_id,            // Use userId as the subject name ID
-        &state.sp_entity_id, // Use the SP entity ID from configuration
-        &state.sp_acs_url,   // Use the SP ACS URL from configuration
-        &state.idp_entity_id,
-        in_response_to,
-        &attributes,
-        state.sign_assertions,
-    ) {
+    let response = match sign_authn_response_with_config(&state.idp, authn_response_fields) {
         Ok(resp) => {
-            debug!("Successfully signed SAML response");
+            debug!("Successfully signed SAML response with ID: {}", resp.id);
             resp
         }
         Err(e) => {
             error!("Failed to sign SAML response: {}", e);
-            return HttpResponse::InternalServerError().body("Failed to create SAML response");
+            return HttpResponse::InternalServerError()
+                .body(format!("Failed to create SAML response: {}", e));
         }
     };
 
@@ -192,7 +186,7 @@ pub async fn handle_idp_initiated_sso(
         state.sp_acs_url
     );
     // Create and return HTML form with SAML response
-    create_saml_post_form(&response, &state.sp_acs_url, &final_relay_state)
+    create_saml_post_form(&response, &state.sp_acs_url, &relay_state)
 }
 
 // Helper function to create user attributes
@@ -244,40 +238,36 @@ fn create_user_attributes<'a>(user_id: &'a str, email: &'a str) -> Vec<ResponseA
         },
     ]
 }
+/// Fields to the sign_auth_response method
+struct SignAuthnResponseFields<'a> {
+    idp_x509_cert_der: &'a [u8],
+    subject_name_id: &'a str,
+    audience: &'a str,
+    acs_url: &'a str,
+    issuer: &'a str,
+    in_response_to_id: Option<String>,
+    attributes: &'a [ResponseAttribute<'a>],
+}
 
 // Custom function to handle response signing with extra options
 fn sign_authn_response_with_config(
     idp: &IdentityProvider,
-    idp_x509_cert_der: &[u8],
-    subject_name_id: &str,
-    audience: &str,
-    acs_url: &str,
-    issuer: &str,
-    in_response_to_id: &str,
-    attributes: &[ResponseAttribute],
-    sign_assertions: bool,
+    fields: SignAuthnResponseFields,
 ) -> Result<Response, Box<dyn std::error::Error>> {
-    // We don't need to build the response template separately,
-    // as sign_authn_response will handle it
-
-    // There's no direct support for signing assertions in the library,
-    // so for now we're only signing the response
-    if sign_assertions {
-        debug!("Okta requires signed assertions, but library only supports signed responses");
-        // TODO: Implement assertion signing capability
-    }
-
     // Use the standard signing method which already returns a Response
-    let response = idp.sign_authn_response(
-        idp_x509_cert_der,
-        subject_name_id,
-        audience,
-        acs_url,
-        issuer,
-        in_response_to_id,
-        attributes,
+    let response = sign_authn_response(
+        idp,
+        fields.idp_x509_cert_der,
+        fields.subject_name_id,
+        fields.audience,
+        fields.acs_url,
+        fields.issuer,
+        fields.in_response_to_id,
+        fields.attributes,
     )?;
 
+    debug!("Generated response ID: {}", response.id);
+    trace!("Response: {:?}", response);
     Ok(response)
 }
 
@@ -287,7 +277,7 @@ fn create_saml_post_form(response: &Response, acs_url: &str, relay_state: &str) 
     let response_xml = response.to_string().unwrap();
 
     // Log the final response XML for debugging
-    debug!("Final signed response XML: {}", response_xml);
+    // debug!("Final signed response XML: {}", response_xml);
     let encoded_response = general_purpose::STANDARD.encode(response_xml.as_bytes());
 
     // Create auto-submit form for the browser
