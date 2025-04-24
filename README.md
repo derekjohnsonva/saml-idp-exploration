@@ -19,7 +19,7 @@ authentication flows and to test SAML integration with Service Providers.
 ## Features
 
 - **Persistent Certificates**: Generated certificates are saved to disk and
-reused between restarts
+  reused between restarts
 - **SP and IdP-initiated SSO**: Supports both authentication flows
 - **Certificate Downloads**: Exposes endpoints to download signing certificates
 - **User Attribute Mapping**: Provides required attributes to SPs like Okta
@@ -33,6 +33,14 @@ reused between restarts
 
 - Rust and Cargo (latest stable version)
 - OpenSSL development packages
+  apt-get update && \
+   apt-get install -y \
+   libxml2-dev \
+   libxmlsec1-dev \
+   clang \
+   libltdl-dev \
+   pkg-config \
+   && rm -rf /var/lib/apt/lists/\*
 
 ### Running the Application
 
@@ -100,4 +108,3 @@ Edit `src/config.rs` to modify:
 ## Acknowledgements
 
 - [Samael](https://github.com/caicancai/samael) - SAML library for Rust
-

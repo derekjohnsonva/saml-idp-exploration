@@ -1,4 +1,4 @@
-use actix_web::{App, HttpServer, middleware::Logger, web};
+use actix_web::{middleware::Logger, web, App, HttpServer};
 use env_logger::Env;
 use log::{debug, info};
 
@@ -45,7 +45,7 @@ async fn main() -> std::io::Result<()> {
             )
     })
     .bind("127.0.0.1:8080")?
-    .workers(2)
+    .workers(1)
     .run()
     .await
 }
