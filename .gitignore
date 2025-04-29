@@ -3,3 +3,5 @@
 idp_private_key.pem
 idp_private_key.der
 idp_certificate.der
+
+CLAUDE.md

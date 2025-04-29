@@ -1,0 +1,25 @@
+users:
+  - user_id: user
+    first_name: First
+    last_name: Last
+    email: user@example.com
+    mobile_phone: "555-123-4567"
+      
+  - user_id: jane.smith
+    first_name: Jane
+    last_name: Smith
+    email: jane.smith@example.com
+    mobile_phone: "555-987-6543"
+    attributes:
+      department: Marketing
+      role: Manager
+      
+  - user_id: admin
+    first_name: Admin
+    last_name: User
+    email: admin@example.com
+    mobile_phone: "555-789-0123"
+    attributes:
+      department: IT
+      role: Administrator
+      permissions: full_access

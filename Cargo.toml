@@ -7,7 +7,8 @@ edition = "2024"
 samael = { git = "https://github.com/derekjohnsonva/samael.git", rev = "3817c2a", features = [
   "xmlsec",
 ] }
-serde = "1.0.0"
+serde = { version = "1.0.0", features = ["derive"] }
+serde_yaml = "0.9.30"
 tokio = { version = "1.28.1", features = ["full"] }
 actix-web = "4.10.2"
 base64 = "0.22.1"

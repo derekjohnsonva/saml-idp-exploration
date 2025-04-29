@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::cert_util::load_or_create_identity_provider;
 use crate::models::state::AppState;
+use crate::models::user::UserDatabase;
 
 pub fn create_app_state() -> web::Data<AppState> {
     // Load or create identity provider
@@ -21,6 +22,18 @@ pub fn create_app_state() -> web::Data<AppState> {
         cert_der.len()
     );
 
+    // Load user database
+    let user_database = match UserDatabase::load_from_file("users.yaml") {
+        Ok(db) => {
+            info!("Loaded user database with {} users", db.users.len());
+            db
+        },
+        Err(e) => {
+            error!("Failed to load user database: {}", e);
+            panic!("Failed to load user database: {}", e);
+        }
+    };
+
     // Create AppState with configuration
     web::Data::new(AppState {
         idp: Arc::new(idp),
@@ -30,5 +43,6 @@ pub fn create_app_state() -> web::Data<AppState> {
         sp_entity_id: "https://www.okta.com/saml2/service-provider/spkfpnrefermtybsfvcd"
             .to_string(),
         sp_acs_url: "https://dev-50824006.okta.com/sso/saml2/0oaocmyrr91ruN6AP5d7".to_string(),
+        user_database,
     })
 }

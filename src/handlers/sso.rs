@@ -1,10 +1,10 @@
-use actix_web::{web, HttpResponse, Responder};
-use base64::engine::general_purpose;
+use actix_web::{HttpResponse, Responder, web};
 use base64::Engine as _;
+use base64::engine::general_purpose;
 use log::{debug, error, info, trace, warn};
+use samael::idp::IdentityProvider;
 use samael::idp::response_builder::ResponseAttribute;
 use samael::idp::sp_extractor::RequiredAttribute;
-use samael::idp::IdentityProvider;
 use samael::schema::{AuthnRequest, Response};
 use samael::traits::ToXml;
 use std::borrow::Borrow;
@@ -12,6 +12,7 @@ use std::borrow::Borrow;
 use crate::handlers::response_builder::sign_authn_response;
 use crate::models::request::{IdpInitiatedQuery, SamlRequest, SsoQuery};
 use crate::models::state::AppState;
+use crate::models::user::User;
 
 pub async fn handle_sso(
     query: web::Query<SsoQuery>,
@@ -28,6 +29,17 @@ pub async fn handle_sso(
     }
 
     debug!("Processing SSO for user: {}", user_id);
+
+    // Check if user exists in our database
+    let user = match state.user_database.find_user(&user_id) {
+        Some(user) => user,
+        None => {
+            warn!("User not found in database: {}", user_id);
+            return HttpResponse::Unauthorized().body(format!("User '{}' not found", user_id));
+        }
+    };
+
+    debug!("User found in database: {}", user_id);
 
     // Decode SAML request
     let authn_request = match saml_request.borrow() {
@@ -96,9 +108,8 @@ pub async fn handle_sso(
         audience, acs_url, in_response_to
     );
 
-    // Create user attributes
-    let email = format!("{}@example.com", user_id);
-    let attributes = create_user_attributes(&user_id, &email);
+    // Create user attributes from database
+    let attributes = create_user_attributes_from_db(user);
 
     debug!("Signing SAML response");
     let authn_response_fields = SignAuthnResponseFields {
@@ -144,14 +155,22 @@ pub async fn handle_idp_initiated_sso(
 
     debug!("Processing IdP-initiated SSO for user: {}", user_id);
 
+    // Check if user exists in our database
+    let user = match state.user_database.find_user(&user_id) {
+        Some(user) => user,
+        None => {
+            warn!("User not found in database: {}", user_id);
+            return HttpResponse::Unauthorized().body(format!("User '{}' not found", user_id));
+        }
+    };
+
+    debug!("User found in database: {}", user_id);
+
     // Get relay state if provided
     let relay_state = query.relay_state.clone().unwrap_or_default();
 
-    // Create user attributes
-    let email = format!("{}@example.com", user_id);
-    let attributes = create_user_attributes(&user_id, &email);
-
-    // For IdP-initiated flows, we use an empty string for InResponseTo
+    // Create user attributes from the database record
+    let attributes = create_user_attributes_from_db(user);
 
     debug!(
         "IdP-initiated SSO to SP entity: {}, ACS URL: {}",
@@ -189,54 +208,58 @@ pub async fn handle_idp_initiated_sso(
     create_saml_post_form(&response, &state.sp_acs_url, &relay_state)
 }
 
-// Helper function to create user attributes
-fn create_user_attributes<'a>(user_id: &'a str, email: &'a str) -> Vec<ResponseAttribute<'a>> {
-    // Extract first and last name from username (for demo purposes)
-    // TODO: Remove this
-    let (first_name, last_name) = if user_id.contains('.') {
-        let parts: Vec<&str> = user_id.split('.').collect();
-        if parts.len() > 1 {
-            (parts[0], parts[1])
-        } else {
-            (parts[0], "User")
-        }
-    } else {
-        ("First", "Last")
-    };
-
-    // Format matches Okta's requested attributes from SP metadata
-    vec![
-        // Required attributes according to Okta SP metadata
+// Create user attributes from database record
+fn create_user_attributes_from_db(user: &User) -> Vec<ResponseAttribute> {
+    let mut attributes = vec![
+        // Core attributes
         ResponseAttribute {
             required_attribute: RequiredAttribute {
                 name: "firstName".to_string(),
                 format: Some("urn:oasis:names:tc:SAML:2.0:attrname-format:uri".to_string()),
             },
-            value: first_name,
+            value: &user.first_name,
         },
         ResponseAttribute {
             required_attribute: RequiredAttribute {
                 name: "lastName".to_string(),
                 format: Some("urn:oasis:names:tc:SAML:2.0:attrname-format:uri".to_string()),
             },
-            value: last_name,
+            value: &user.last_name,
         },
         ResponseAttribute {
             required_attribute: RequiredAttribute {
                 name: "email".to_string(),
                 format: Some("urn:oasis:names:tc:SAML:2.0:attrname-format:uri".to_string()),
             },
-            value: email,
+            value: &user.email,
         },
-        // Optional attribute
-        ResponseAttribute {
+    ];
+
+    // Add mobile phone if available
+    if let Some(phone) = &user.mobile_phone {
+        attributes.push(ResponseAttribute {
             required_attribute: RequiredAttribute {
                 name: "mobilePhone".to_string(),
                 format: Some("urn:oasis:names:tc:SAML:2.0:attrname-format:uri".to_string()),
             },
-            value: "555-123-4567", // Example value
-        },
-    ]
+            value: phone,
+        });
+    }
+
+    // Add any custom attributes from the user record
+    if let Some(custom_attrs) = &user.attributes {
+        for (name, value) in custom_attrs {
+            attributes.push(ResponseAttribute {
+                required_attribute: RequiredAttribute {
+                    name: name.clone(),
+                    format: Some("urn:oasis:names:tc:SAML:2.0:attrname-format:uri".to_string()),
+                },
+                value,
+            });
+        }
+    }
+
+    attributes
 }
 /// Fields to the sign_auth_response method
 struct SignAuthnResponseFields<'a> {
