@@ -2,8 +2,8 @@ use chrono::Utc;
 use log::debug;
 use samael::attribute::{Attribute, AttributeValue};
 use samael::crypto;
-use samael::idp::response_builder::ResponseAttribute;
 use samael::idp::IdentityProvider;
+use samael::idp::response_builder::ResponseAttribute;
 use samael::schema::{
     Assertion, AttributeStatement, AudienceRestriction, AuthnContext, AuthnContextClassRef,
     AuthnStatement, Conditions, Issuer, Response, Status, StatusCode, Subject, SubjectConfirmation,
@@ -177,10 +177,6 @@ pub fn sign_authn_response(
     );
 
     let response_xml_unsigned = response.to_string()?;
-    debug!(
-        "Created the unsigned response. Value is {:?}",
-        response_xml_unsigned
-    );
     let signed_xml = crypto::sign_xml(
         response_xml_unsigned.as_str(),
         idp.export_private_key_der()?.as_slice(),
