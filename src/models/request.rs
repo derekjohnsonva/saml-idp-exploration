@@ -18,4 +18,3 @@ pub struct SamlRequest {
     pub saml_request: String,
     pub relay_state: Option<String>,
 }
-

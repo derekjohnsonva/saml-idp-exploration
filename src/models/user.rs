@@ -24,11 +24,11 @@ impl UserDatabase {
         let mut file = File::open(path)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
-        
+
         let db: UserDatabase = serde_yaml::from_str(&contents)?;
         Ok(db)
     }
-    
+
     pub fn find_user(&self, user_id: &str) -> Option<&User> {
         self.users.iter().find(|u| u.user_id == user_id)
     }

@@ -105,4 +105,3 @@ fn persist_idp_identity(idp: &IdentityProvider, cert_der: &[u8]) -> io::Result<(
     info!("IdP identity successfully persisted to disk");
     Ok(())
 }
-
