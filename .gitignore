@@ -5,3 +5,5 @@ idp_private_key.der
 idp_certificate.der
 
 CLAUDE.md
+
+.env

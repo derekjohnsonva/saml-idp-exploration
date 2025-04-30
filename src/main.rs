@@ -1,6 +1,8 @@
-use actix_web::{middleware::Logger, web, App, HttpServer};
+use actix_web::{App, HttpServer, middleware::Logger, web};
+use dotenv::dotenv;
 use env_logger::Env;
-use log::{debug, info};
+use log::{debug, error, info};
+use std::env;
 
 mod cert_util;
 mod config;
@@ -9,6 +11,9 @@ mod models;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // Load environment variables from .env file
+    dotenv().ok();
+
     // Initialize logger
     // Set the default log level to INFO, but allow overriding via RUST_LOG environment variable
     env_logger::init_from_env(Env::default().default_filter_or("info"));
@@ -16,12 +21,27 @@ async fn main() -> std::io::Result<()> {
     info!("Starting SAML IdP server");
 
     // Create application state
-    let app_state = config::create_app_state();
-    debug!("Application state created");
+    let app_state = match config::create_app_state() {
+        Ok(state) => {
+            debug!("Application state created successfully");
+            state
+        }
+        Err(e) => {
+            error!("Failed to create application state: {}", e);
+            return Err(std::io::Error::other(
+                format!("Failed to create application state: {}", e)
+            ));
+        }
+    };
+
+    // Get server host and port from environment variables
+    let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let server_port = env::var("SERVER_PORT").unwrap_or_else(|_| "8080".to_string());
+    let server_addr = format!("{}:{}", server_host, server_port);
 
     // Start HTTP server
     info!("Configuring HTTP server");
-    info!("Server will be available at http://127.0.0.1:8080");
+    info!("Server will be available at http://{}", server_addr);
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default()) // Add logger middleware for HTTP requests
@@ -44,7 +64,7 @@ async fn main() -> std::io::Result<()> {
                 web::get().to(handlers::metadata::certificate_der),
             )
     })
-    .bind("127.0.0.1:8080")?
+    .bind(&server_addr)?
     .workers(1)
     .run()
     .await

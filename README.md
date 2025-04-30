@@ -97,13 +97,30 @@ When using IdP-initiated flow, provide a `user_id` that exists in the user datab
 
 ## Configuration
 
-### Core Settings
+### Environment Variables
 
-Edit `src/config.rs` to modify:
+The application uses environment variables for configuration. Create a `.env` file in the root directory based on the provided `.env_example`:
 
-- The IdP's entity ID
-- SP settings (entity ID and ACS URL)
-- Whether assertions should be signed
+```
+IDP_ENTITY_ID=https://your-idp-url.example.com
+SP_ENTITY_ID=https://your-sp-entity-id.example.com
+SP_ACS_URL=https://your-sp-acs-url.example.com
+USER_DATABASE_PATH=users.yaml
+SERVER_HOST=127.0.0.1
+SERVER_PORT=8080
+```
+
+**Required environment variables:**
+- `IDP_ENTITY_ID`: Your Identity Provider's entity ID
+- `SP_ENTITY_ID`: Service Provider's entity ID (e.g., from Okta)
+- `SP_ACS_URL`: Service Provider's Assertion Consumer Service URL
+- `USER_DATABASE_PATH`: Path to your user database YAML file
+
+**Optional environment variables:**
+- `SERVER_HOST`: Host address to bind the server to (defaults to 127.0.0.1)
+- `SERVER_PORT`: Port to run the server on (defaults to 8080)
+
+All required environment variables must be set for the application to start successfully. The application will exit with an error if any required variable is missing.
 
 ### User Database
 
