@@ -7,3 +7,4 @@ idp_certificate.der
 CLAUDE.md
 
 .env
+.DS_Store
