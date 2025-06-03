@@ -36,7 +36,8 @@ in Okta by using our own Identity Provider.
 
 - Rust and Cargo (latest stable version)
 - OpenSSL development packages. This is used by the [samael](https://github.com/njaremko/samael) package for signing responses. To install, run
-``` bash
+
+```bash
 apt-get update && \
    apt-get install -y \
    libxml2-dev \
@@ -46,7 +47,7 @@ apt-get update && \
    pkg-config \
 ```
 
-*Optional* - You can use a [devcontainer](https://code.visualstudio.com/docs/devcontainers/containers) to work on and run this project. This will simplify requirements management. While trying to build on a mac, I experienced a lot of issues related to `xmlsec`. The [devcontainer.json](.devcontainer/devcontainer.json) file is available and will get you running with minimal troubleshooting required.
+_Optional_ - You can use a [devcontainer](https://code.visualstudio.com/docs/devcontainers/containers) to work on and run this project. This will simplify requirements management. While trying to build on a mac, I experienced a lot of issues related to `xmlsec`. The [devcontainer.json](.devcontainer/devcontainer.json) file is available and will get you running with minimal troubleshooting required.
 
 ### Running the Application
 
@@ -101,7 +102,7 @@ When using IdP-initiated flow, provide a `user_id` that exists in the user datab
 
 The application uses environment variables for configuration. Create a `.env` file in the root directory based on the provided `.env_example`:
 
-```
+```env
 IDP_ENTITY_ID=https://your-idp-url.example.com
 SP_ENTITY_ID=https://your-sp-entity-id.example.com
 SP_ACS_URL=https://your-sp-acs-url.example.com
@@ -111,12 +112,14 @@ SERVER_PORT=8080
 ```
 
 **Required environment variables:**
+
 - `IDP_ENTITY_ID`: Your Identity Provider's entity ID
 - `SP_ENTITY_ID`: Service Provider's entity ID (e.g., from Okta)
 - `SP_ACS_URL`: Service Provider's Assertion Consumer Service URL
 - `USER_DATABASE_PATH`: Path to your user database YAML file
 
 **Optional environment variables:**
+
 - `SERVER_HOST`: Host address to bind the server to (defaults to 127.0.0.1)
 - `SERVER_PORT`: Port to run the server on (defaults to 8080)
 
@@ -134,6 +137,7 @@ The application now uses a YAML file (`users.yaml`) as a user database. Each use
 - `attributes`: (Optional) Additional custom attributes as key-value pairs
 
 Example of a user entry:
+
 ```yaml
 - user_id: john.doe
   first_name: John
@@ -149,7 +153,7 @@ Users are validated during SSO requests, and only users defined in the database 
 
 ## Known Issues
 
-Currently, there is a bug in the [Samael](https://github.com/caicancai/samael) library that causes all builds that require the `xmlsec` feature flag to fail. This bug is documented [here](https://github.com/njaremko/samael/issues/69). Because of this, we are using a forked and modified version of the Samael library that I created [here](https://github.com/derekjohnsonva/samael). Hopefully, this issue will be resolved. Additionally, there is a merge request that will greatly improve SAML response signing by reducing the use for the [rust-xmlsec](https://github.com/voipir/rust-xmlsec) library. 
+Currently, there is a bug in the [Samael](https://github.com/caicancai/samael) library that causes all builds that require the `xmlsec` feature flag to fail. This bug is documented [here](https://github.com/njaremko/samael/issues/69). Because of this, we are using a forked and modified version of the Samael library that I created [here](https://github.com/derekjohnsonva/samael). Hopefully, this issue will be resolved. Additionally, there is a merge request that will greatly improve SAML response signing by reducing the use for the [rust-xmlsec](https://github.com/voipir/rust-xmlsec) library.
 
 ## Acknowledgements
 

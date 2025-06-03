@@ -1,4 +1,4 @@
-use actix_web::{App, HttpServer, middleware::Logger, web};
+use actix_web::{middleware::Logger, web, App, HttpServer};
 use dotenv::dotenv;
 use env_logger::Env;
 use log::{debug, error, info};
@@ -28,9 +28,10 @@ async fn main() -> std::io::Result<()> {
         }
         Err(e) => {
             error!("Failed to create application state: {}", e);
-            return Err(std::io::Error::other(
-                format!("Failed to create application state: {}", e)
-            ));
+            return Err(std::io::Error::other(format!(
+                "Failed to create application state: {}",
+                e
+            )));
         }
     };
 
